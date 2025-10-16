@@ -23,7 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 
 
-*.csv
+# *.csv
 *.mp4
 *.pth.tar
 .env
