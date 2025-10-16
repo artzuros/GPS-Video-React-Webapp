@@ -1,0 +1,36 @@
+.upload-form {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.upload-form input[type="file"] {
+  padding: 6px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+}
+
+.upload-form button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  border: none;
+  color: white;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.upload-form button:hover {
+  background-color: #0056b3;
+}
+
+.upload-form button:disabled {
+  background-color: #999;
+  cursor: not-allowed;
+}
