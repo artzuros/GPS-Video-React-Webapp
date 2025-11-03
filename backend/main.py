@@ -64,7 +64,6 @@ async def upload_files(
             {
                 "lat": float(row["lat"]),
                 "lon": float(row["lon"]),
-                "highlight": row["highlight"].lower() == 'true',
                 "timestamp": float(row["timestamp"])
             }
             for row in reader
