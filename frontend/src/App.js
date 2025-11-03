@@ -9,7 +9,11 @@ export default function App() {
   const [videoData, setVideoData] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef(null);
+  const heatmapRef = useRef(null);
   const [inferenceStatus, setInferenceStatus] = useState('idle'); // idle | running | done
+  const isSeekingRef = useRef(false);
+  const lastManualSeekRef = useRef(0);
+  const [progress, setProgress] = useState(0);
 
 
   // Fetch all uploaded videos
@@ -38,28 +42,59 @@ export default function App() {
   };
 
   const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+    if (!videoRef.current || isSeekingRef.current) return;
+    const t = videoRef.current.currentTime;
+    setCurrentTime(t);
+
+    // Keep heatmap synced smoothly
+    if (heatmapRef.current) {
+      const diff = Math.abs(heatmapRef.current.currentTime - t);
+      if (diff > 0.3) {
+        heatmapRef.current.currentTime = t;
+      }
     }
   };
 
   const handleSeek = (time) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
+    if (!videoRef.current) return;
+    isSeekingRef.current = true;
+    lastManualSeekRef.current = Date.now();
+
+    // Jump both videos instantly
+    videoRef.current.currentTime = time;
+    if (heatmapRef.current) heatmapRef.current.currentTime = time;
+    setCurrentTime(time);
+
+    // Turn off seek lock shortly after (300ms)
+    setTimeout(() => {
+      isSeekingRef.current = false;
+    }, 300);
   };
+
 
   const handleRunInference = async () => {
     if (!videoData) return;
     try {
       setInferenceStatus('running');
-      const res = await axios.post(
+      setProgress(0);
+      await axios.post(
         `http://localhost:8000/api/videos/${videoData.id}/inference?generate_heatmap=true`
       );
-      setInferenceStatus('done');
-      const refreshed = await axios.get(`http://localhost:8000/video/${videoData.id}`);
-      setVideoData(refreshed.data);
+
+      // Poll for progress
+      const interval = setInterval(async () => {
+        const res = await axios.get(`http://localhost:8000/api/videos/${videoData.id}/progress`);
+        setProgress(res.data.progress);
+
+        if (res.data.status === 'done' || res.data.progress >= 100) {
+          clearInterval(interval);
+          setInferenceStatus('done');
+
+          // Refresh data
+          const refreshed = await axios.get(`http://localhost:8000/video/${videoData.id}`);
+          setVideoData(refreshed.data);
+        }
+      }, 1000);
     } catch (err) {
       console.error('Inference failed:', err);
       setInferenceStatus('idle');
@@ -99,14 +134,52 @@ export default function App() {
       {/* Main Video + Map + Inference Panel */}
       {videoData && (
         <div className="content-wrapper">
-          {/* Video */}
-          <div className="video-wrapper">
-            <video
-              ref={videoRef}
-              src={`http://localhost:8000/uploads/${encodeURIComponent(videoData.name)}`}
-              controls
-              onTimeUpdate={handleTimeUpdate}
-            />
+
+          {/* 🧠 VIDEO + HEATMAP SIDE BY SIDE */}
+          <div className="video-section">
+            {/* Original Video */}
+            <div className="video-wrapper">
+              <h3>Original Video</h3>
+              <video
+                ref={videoRef}
+                src={`http://localhost:8000/uploads/${encodeURIComponent(videoData.name)}`}
+                controls
+                onTimeUpdate={handleTimeUpdate}
+                onPlay={() => {
+                  if (heatmapRef.current && heatmapRef.current.paused) {
+                    heatmapRef.current.play();
+                  }
+                }}
+                onPause={() => {
+                  if (heatmapRef.current && !heatmapRef.current.paused) {
+                    heatmapRef.current.pause();
+                  }
+                }}
+              />
+            </div>
+
+            {/* Heatmap Video (if exists) */}
+            {videoData?.inferences?.length > 0 &&
+              videoData.inferences[videoData.inferences.length - 1].heatmap_path && (
+                <div className="video-wrapper">
+                  <h3>Heatmap</h3>
+                  <video
+                    ref={heatmapRef}
+                    src={`http://localhost:8000/${videoData.inferences[
+                      videoData.inferences.length - 1
+                    ].heatmap_path}`}
+                    controls
+                    muted
+                    onPlay={() => {
+                      if (videoRef.current && videoRef.current.paused) videoRef.current.play();
+                    }}
+                    onPause={() => {
+                      if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+                    }}
+
+                  />
+                </div>
+              )}
           </div>
 
           {/* Map */}
@@ -127,11 +200,22 @@ export default function App() {
               disabled={inferenceStatus === 'running'}
               className="inference-button"
             >
-              {inferenceStatus === 'running' ? 'Running Inference...' : 'Run Inference + Heatmap'}
+              {inferenceStatus === 'running'
+                ? 'Running Inference...'
+                : 'Run Inference + Heatmap'}
             </button>
 
+            {/* 🔄 Progress bar */}
             {inferenceStatus === 'running' && (
-              <div className="inference-status">🔄 Please wait, processing video...</div>
+              <div className="progress-container">
+                <div className="progress-label">Processing...</div>
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
             )}
 
             {/* List of past inferences */}
@@ -140,7 +224,10 @@ export default function App() {
                 {videoData.inferences.map((inf) => (
                   <li key={inf.id}>
                     📄{' '}
-                    <a href={`http://localhost:8000/${inf.inference_results_path}`} download>
+                    <a
+                      href={`http://localhost:8000/${inf.inference_results_path}`}
+                      download
+                    >
                       CSV
                     </a>
                     {inf.heatmap_path && (
@@ -166,6 +253,7 @@ export default function App() {
               <p>No inference results yet.</p>
             )}
           </div>
+
         </div>
       )}
     </div>

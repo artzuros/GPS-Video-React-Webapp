@@ -2,41 +2,50 @@ import React, { useEffect, useRef } from 'react';
 
 export default function VideoMap({ gpsPoints, currentTime, onSeek }) {
   const containerRef = useRef(null);
-  const mapRef = useRef(null); // google.maps.Map instance
+  const mapRef = useRef(null);
   const markerRef = useRef(null);
   const polylinesRef = useRef([]);
   const clickListenerRef = useRef(null);
+  const hasCenteredRef = useRef(false); // 👈 prevents re-centering every render
 
-  // Initialize map once
+  // Initialize map ONCE
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
     mapRef.current = new window.google.maps.Map(containerRef.current, {
       center: { lat: 0, lng: 0 },
       zoom: 16,
+      mapId: 'DEMO_MAP_ID',
     });
   }, []);
 
-  // Update polylines / initial marker when gpsPoints change
+  // Handle gpsPoints updates (draw paths, create marker)
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !gpsPoints || gpsPoints.length === 0) return;
 
-    // clear old overlays
-    polylinesRef.current.forEach(p => p.setMap(null));
+    // Clear old polylines
+    polylinesRef.current.forEach((p) => p.setMap(null));
     polylinesRef.current = [];
+
+    // Clear old marker
     if (markerRef.current) {
-      markerRef.current.setMap(null);
+      markerRef.current.map = null;
       markerRef.current = null;
     }
+
+    // Clear old listeners
     if (clickListenerRef.current) {
       window.google.maps.event.removeListener(clickListenerRef.current);
       clickListenerRef.current = null;
     }
 
-    if (!gpsPoints || gpsPoints.length < 1) return;
-
-    // center map on first point
     const first = gpsPoints[0];
-    mapRef.current.setCenter({ lat: first.lat, lng: first.lon });
+
+    // ✅ Only center once (when map first loads)
+    if (!hasCenteredRef.current) {
+      mapRef.current.setCenter({ lat: first.lat, lng: first.lon });
+      hasCenteredRef.current = true;
+    }
 
     // Draw polylines
     if (gpsPoints.length > 1) {
@@ -48,36 +57,37 @@ export default function VideoMap({ gpsPoints, currentTime, onSeek }) {
             { lat: next.lat, lng: next.lon },
           ],
           geodesic: true,
-          strokeColor: point.highlight ? 'red' : 'green',
+          strokeColor: point.highlight ? 'green' : 'red',
           strokeOpacity: 1.0,
-          strokeWeight: 6,
+          strokeWeight: 5,
           map: mapRef.current,
         });
       });
     }
 
-    // Create marker at first point
-    markerRef.current = new window.google.maps.Marker({
+    // ✅ Create AdvancedMarkerElement
+    const markerDiv = document.createElement('div');
+    markerDiv.style.width = '12px';
+    markerDiv.style.height = '12px';
+    markerDiv.style.background = 'blue';
+    markerDiv.style.borderRadius = '50%';
+    markerDiv.style.border = '2px solid white';
+    markerDiv.style.boxShadow = '0 0 6px rgba(0,0,0,0.4)';
+
+    markerRef.current = new window.google.maps.marker.AdvancedMarkerElement({
       position: { lat: first.lat, lng: first.lon },
       map: mapRef.current,
-      icon: {
-        path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-        scale: 6,
-        fillColor: 'blue',
-        fillOpacity: 1,
-        strokeWeight: 1,
-      },
-      draggable: false,
+      content: markerDiv,
     });
 
-    // Add click listener on map to seek video
+    // Add click-to-seek
     clickListenerRef.current = mapRef.current.addListener('click', (e) => {
       const clickedLat = e.latLng.lat();
       const clickedLng = e.latLng.lng();
 
       let nearestPoint = gpsPoints[0];
       let minDist = Infinity;
-      gpsPoints.forEach(point => {
+      gpsPoints.forEach((point) => {
         const dist = Math.hypot(point.lat - clickedLat, point.lon - clickedLng);
         if (dist < minDist) {
           minDist = dist;
@@ -88,12 +98,11 @@ export default function VideoMap({ gpsPoints, currentTime, onSeek }) {
       if (onSeek) onSeek(nearestPoint.timestamp);
     });
 
-    // cleanup when gpsPoints changes or component unmounts
     return () => {
-      polylinesRef.current.forEach(p => p.setMap(null));
+      polylinesRef.current.forEach((p) => p.setMap(null));
       polylinesRef.current = [];
       if (markerRef.current) {
-        markerRef.current.setMap(null);
+        markerRef.current.map = null;
         markerRef.current = null;
       }
       if (clickListenerRef.current) {
@@ -103,11 +112,10 @@ export default function VideoMap({ gpsPoints, currentTime, onSeek }) {
     };
   }, [gpsPoints, onSeek]);
 
-  // Update marker position when currentTime changes (no map re-creation)
+  // ✅ Only move marker with time, never reset map
   useEffect(() => {
     if (!gpsPoints || gpsPoints.length === 0 || !markerRef.current) return;
 
-    // Find the gps segment containing currentTime
     for (let i = 0; i < gpsPoints.length - 1; i++) {
       const p1 = gpsPoints[i];
       const p2 = gpsPoints[i + 1];
@@ -115,14 +123,14 @@ export default function VideoMap({ gpsPoints, currentTime, onSeek }) {
         const ratio = (currentTime - p1.timestamp) / (p2.timestamp - p1.timestamp || 1);
         const lat = p1.lat + (p2.lat - p1.lat) * ratio;
         const lon = p1.lon + (p2.lon - p1.lon) * ratio;
-        markerRef.current.setPosition({ lat, lng: lon });
+        markerRef.current.position = { lat, lng: lon };
         return;
       }
     }
 
     // fallback to last point
     const last = gpsPoints[gpsPoints.length - 1];
-    markerRef.current.setPosition({ lat: last.lat, lng: last.lon });
+    markerRef.current.position = { lat: last.lat, lng: last.lon };
   }, [currentTime, gpsPoints]);
 
   return <div ref={containerRef} style={{ height: '400px', width: '100%' }} />;
