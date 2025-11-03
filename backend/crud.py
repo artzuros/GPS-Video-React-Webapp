@@ -29,16 +29,37 @@ def create_video(db: Session, name: str, file_path: str, duration: float):
     return video
 
 def create_gps_points(db: Session, video_id: int, gps_data: list):
+    """
+    gps_data: list of dicts with keys lat, lon, timestamp
+    highlight will be set after inference
+    """
     for row in gps_data:
         point = models.GPSPoint(
             video_id=video_id,
             lat=row["lat"],
             lon=row["lon"],
-            highlight=row["highlight"],
-            timestamp=row["timestamp"]
+            timestamp=row["timestamp"],
+            highlight=row.get("highlight", None),  # optional
         )
         db.add(point)
     db.commit()
+
+def update_gps_points_with_inference(
+    db: Session, video_id: int, frame_timestamps: list, raw_probs: list, smoothed_probs: list = None
+):
+    """
+    Match video frame predictions to GPS points based on timestamp.
+    Assign binary highlight = True if smoothed_prob > 0.5 (or raw if smoothed is None)
+    """
+    gps_points = db.query(models.GPSPoint).filter(models.GPSPoint.video_id == video_id).all()
+    for point in gps_points:
+        # Find nearest frame timestamp
+        nearest_idx = min(range(len(frame_timestamps)), key=lambda i: abs(frame_timestamps[i] - point.timestamp))
+        prob = smoothed_probs[nearest_idx] if smoothed_probs is not None else raw_probs[nearest_idx]
+        point.highlight = True if prob > 0.5 else False
+        print(point.highlight)
+    db.commit()
+
 
 def get_video_with_gps(db: Session, video_id: int):
     return db.query(models.Video).filter(models.Video.id == video_id).first()
