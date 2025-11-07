@@ -3,11 +3,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from . import crud, models, database
-from . inference_utils import run_inference_on_video_async, progress_tracker  # <- async version
+from .inference_utils import run_inference_on_video_async, progress_tracker
+from .utils.transcode import transcode_to_h264
 import os
 import asyncio
 
 router = APIRouter()
+
 @router.post("/videos/{video_id}/inference")
 async def infer_on_video(
     video_id: int,
@@ -24,6 +26,15 @@ async def infer_on_video(
         os.path.dirname(os.path.abspath(__file__)),
         "BinaryClassification", "CBAM", "weights", "model_best.pth.tar",
     )
+
+    # ✅ Always ensure uploaded video is in H.264 before inference
+    try:
+        transcoded_path = transcode_to_h264(video.file_path)
+        if transcoded_path != video.file_path:
+            video.file_path = transcoded_path
+            db.commit()
+    except Exception as e:
+        print(f"⚠️ Transcoding before inference failed: {e}")
 
     # Initialize progress
     progress_tracker[str(video_id)] = {"current": 0, "total": 1, "status": "starting"}
@@ -63,7 +74,7 @@ async def infer_on_video(
     def run_async_task(coro_func):
         asyncio.run(coro_func())
 
-    # ✅ Launch the async inference safely in background
+    # ✅ Launch inference asynchronously
     background_tasks.add_task(run_async_task, inference_job)
 
     return {"message": "Inference started", "status": "running"}
@@ -72,9 +83,9 @@ async def infer_on_video(
 @router.get("/videos/{video_id}/progress")
 async def get_progress(video_id: str):
     progress = progress_tracker.get(str(video_id), {"current": 0, "total": 1, "status": "idle"})
-
     percent = (progress["current"] / progress["total"]) * 100 if progress["total"] > 0 else 0
     return {"progress": percent, "status": progress["status"]}
+
 
 @router.get("/videos/{video_id}/inference")
 def get_inference_history(video_id: int, db: Session = Depends(database.get_db)):
