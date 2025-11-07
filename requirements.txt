@@ -1,0 +1,10 @@
+Flask==2.0.1
+numpy @ file:///home/conda/feedstock_root/build_artifacts/numpy_1622014599281/work
+protobuf==3.17.2
+pydantic @ file:///home/conda/feedstock_root/build_artifacts/pydantic_1614365155833/work
+scikit-learn==0.24.2
+torch @ file:///opt/pytorch/pytorch
+torchtext @ file:///opt/pytorch/text
+torchvision @ file:///opt/pytorch/vision
+tqdm==4.53.0
+uvicorn==0.14.0
