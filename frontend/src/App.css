@@ -164,3 +164,44 @@
   background-color: #4caf50;
   transition: width 0.3s ease;
 }
+
+.video-overlay-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.base-video,
+.heatmap-video-overlay {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.heatmap-video-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0.5; /* adjust transparency */
+  mix-blend-mode: lighten; /* nice overlay effect */
+  pointer-events: none; /* don’t block controls */
+}
+
+.toggle-heatmap-btn {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.toggle-heatmap-btn:hover {
+  background-color: #0056b3;
+}
+
+.toggle-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
