@@ -2,27 +2,18 @@ from sqlalchemy.orm import Session
 from . import models
 import os
 import subprocess
+from .utils.transcode import transcode_to_h264
 
 def create_video(db: Session, name: str, file_path: str, duration: float):
-    # Define upload directory and output file path
+    # Ensure upload directory exists
     upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
-    output_file = os.path.join(upload_dir, os.path.basename(file_path).replace('.mp4', '_h264.mp4'))
+    # Transcode to H.264
+    transcoded_path = transcode_to_h264(file_path)
+    # Update name and path for DB
+    name = os.path.basename(transcoded_path)
+    video = models.Video(name=name, file_path=transcoded_path, duration=duration)
 
-    # FFmpeg command to transcode and force even dimensions
-    ffmpeg_cmd = [
-        'ffmpeg',
-        '-i', file_path,
-        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '23',
-        '-c:a', 'aac', '-b:a', '128k',
-        output_file
-    ]
-    subprocess.run(ffmpeg_cmd, check=True)
-    name = name.replace('.mp4', '_h264.mp4')
-    # Save video record with new file path
-    video = models.Video(name=name, file_path=output_file, duration=duration)
     db.add(video)
     db.commit()
     db.refresh(video)
