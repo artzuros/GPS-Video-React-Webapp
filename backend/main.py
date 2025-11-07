@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+import cv2, math
+
 from . import crud, models, database
 from .video_routes import router as video_router
 from .inference_utils import transcode_to_h264
