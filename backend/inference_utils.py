@@ -47,7 +47,7 @@ async def run_inference_on_video_async(
     """
 
     def _run_inference():
-        DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
         # Load model
         model = resnet_cbam.resnet101_cbam(pretrained=False)

@@ -9,7 +9,7 @@ def create_video(db: Session, name: str, file_path: str, duration: float):
     upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
     os.makedirs(upload_dir, exist_ok=True)
     # Transcode to H.264
-    transcoded_path = transcode_to_h264(file_path)
+    # transcoded_path = transcode_to_h264(file_path)
     # Update name and path for DB
     name = os.path.basename(transcoded_path)
     video = models.Video(name=name, file_path=transcoded_path, duration=duration)
