@@ -25,12 +25,31 @@ class GradCAM:
     def remove_hooks(self):
         for handle in self.hook_handles:
             handle.remove()
-
+            
     def generate(self, input_tensor, class_idx=None):
         """
         input_tensor: torch.Tensor, shape [1, C, H, W] on correct device
         class_idx: optional int, target class index
         """
+        output = self.model(input_tensor)
+        if class_idx is None:
+            class_idx = torch.argmax(output, dim=1).item()
+
+        self.model.zero_grad()
+        one_hot = torch.zeros_like(output, device=output.device)
+        one_hot[0, class_idx] = 1
+        output.backward(gradient=one_hot, retain_graph=True)
+
+        pooled_grads = torch.mean(self.gradients, dim=[0, 2, 3])  # [C]
+        activations = self.activations[0] * pooled_grads[:, None, None]  # [C, H, W]
+
+        heatmap = torch.relu(torch.sum(activations, dim=0))
+        heatmap = (heatmap / torch.max(heatmap)).detach().cpu().numpy()
+
+        return heatmap
+
+    def generate(self, input_tensor, class_idx=None):
+
         # Forward pass
         output = self.model(input_tensor)
         if class_idx is None:
@@ -50,6 +69,6 @@ class GradCAM:
         # Compute heatmap
         heatmap = torch.relu(torch.sum(activations, dim=0))  # [H, W]
         heatmap /= torch.max(heatmap)
-        heatmap = heatmap.cpu().numpy()  # convert to NumPy for OpenCV
+        heatmap = heatmap.detach().cpu().numpy()
 
         return heatmap
